@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch List Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-width: 300px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .edit-btn {
+            background-color: #2196F3;
+            padding: 5px 10px;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .copy-btn {
+            background-color: #ff9800;
+        }
+        .pdf-btn {
+            background-color: #f44336;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+        .error {
+            color: red;
+            margin-top: 5px;
+            display: none;
+        }
+        .post-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #nameEditor {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+        .name-input {
+            margin-bottom: 10px;
+        }
+        .button-group {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .cancel-btn {
+            background-color: #666;
+            margin-left: 10px;
+        }
+        .export-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .post-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .post-header input {
+            width: 200px;
+            padding: 5px;
+        }
+        .date-display {
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Watch List Generator</h1>
+        <div class="date-display">
+            Date: <span id="currentDate"></span>
+        </div>
+        
+        <div class="input-group">
+            <label for="posts">Number of Posts:</label>
+            <input type="number" id="posts" min="1" required>
+            <div id="postsError" class="error">Please enter a valid number of posts</div>
+        </div>
+        
+        <div class="input-group">
+            <label for="men">Number of People:</label>
+            <input type="number" id="men" min="1" required>
+            <div id="menError" class="error">Please enter a valid number of people</div>
+        </div>
+        
+        <div class="input-group">
+            <label for="startTime">Starting Time:</label>
+            <input type="time" id="startTime" required>
+            <div id="startTimeError" class="error">Please enter a valid start time</div>
+        </div>
+        
+        <div class="input-group">
+            <label for="endTime">Ending Time:</label>
+            <input type="time" id="endTime" required>
+            <div id="endTimeError" class="error">Please enter a valid end time</div>
+        </div>
+        
+        <button onclick="generateWatchList()">Generate Watch List</button>
+    <h4>Made by Leon Be-Hahava <3 </h4>
+        
+        <div id="watchListsContainer" style="display: none;">
+            <h2>Watch Lists</h2>
+            <div class="export-buttons no-print">
+                <button onclick="showNameEditor()" class="edit-btn">Edit Names</button>
+                <!-- <button onclick="exportToPDF()" class="pdf-btn">Download PDF</button> -->
+                <button onclick="copyToClipboard()" class="copy-btn">Copy to Clipboard</button>
+            </div>
+            <div id="postList"></div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div id="nameEditor">
+        <h3>Edit Names</h3>
+        <div id="nameInputs"></div>
+        <div class="button-group">
+            <button onclick="saveNames()">Save</button>
+            <button onclick="hideNameEditor()" class="cancel-btn">Cancel</button>
+        </div>
+        
+    </div>
+
+
+    <script>
+        let watchData = [];
+        let customNames = [];
+
+        // Update the current date display when page loads
+        function updateCurrentDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        updateCurrentDate();
+
+        function showNameEditor() {
+            const totalPeople = parseInt(document.getElementById('men').value);
+            const nameInputs = document.getElementById('nameInputs');
+            nameInputs.innerHTML = '';
+
+            for (let i = 0; i < totalPeople; i++) {
+                const div = document.createElement('div');
+                div.className = 'name-input';
+                
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = customNames[i] || '';
+                input.placeholder = `Person ${i + 1}`;
+                
+                div.appendChild(input);
+                nameInputs.appendChild(div);
+            }
+
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('nameEditor').style.display = 'block';
+        }
+
+        function hideNameEditor() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('nameEditor').style.display = 'none';
+        }
+
+        function saveNames() {
+            const inputs = document.querySelectorAll('#nameInputs input');
+            customNames = Array.from(inputs).map(input => input.value.trim() || input.placeholder);
+            hideNameEditor();
+            generateWatchList();
+        }
+
+        function generateWatchList() {
+            const posts = parseInt(document.getElementById('posts').value);
+            const men = parseInt(document.getElementById('men').value);
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+
+            if (!validateInputs(posts, men, startTime, endTime)) {
+                return;
+            }
+
+            const postListContainer = document.getElementById('postList');
+            postListContainer.innerHTML = '';
+            watchData = [];
+
+            let startTimeObj = new Date(`1970-01-01T${startTime}`);
+            let endTimeObj = new Date(`1970-01-01T${endTime}`);
+            
+            if (endTimeObj <= startTimeObj) {
+                endTimeObj.setDate(endTimeObj.getDate() + 1);
+            }
+
+            const totalTime = (endTimeObj - startTimeObj) / (1000 * 60 * 60);
+            const timePerPerson = totalTime / men;
+
+            const people = customNames.length === men ? 
+                          [...customNames] : 
+                          Array.from({length: men}, (_, i) => `Person ${i + 1}`);
+            
+            shuffleArray(people);
+
+            const peoplePerPost = Math.floor(men / posts);
+            const remainder = men % posts;
+
+            let currentIndex = 0;
+
+            for (let post = 1; post <= posts; post++) {
+                const peopleForThisPost = peoplePerPost + (post <= remainder ? 1 : 0);
+                
+                const postData = {
+                    postNumber: post,
+                    people: [],
+                    startTime: formatTime(startTimeObj),
+                    endTime: formatTime(endTimeObj)
+                };
+
+                const postSection = document.createElement('div');
+                postSection.className = 'post-section';
+                
+                const postHeader = document.createElement('div');
+                postHeader.className = 'post-header';
+                
+                const postInput = document.createElement('input');
+                postInput.type = 'text';
+                postInput.value = `Post ${post}`;
+                postInput.placeholder = `Post ${post}`;
+                
+                postHeader.appendChild(postInput);
+                postSection.appendChild(postHeader);
+
+                const table = createTable();
+                
+                const timeIntervals = calculateTimeIntervals(startTimeObj, endTimeObj, peopleForThisPost);
+
+                for (let i = 0; i < peopleForThisPost; i++) {
+                    const personName = people[currentIndex];
+                    const personData = {
+                        name: personName,
+                        start: formatTime(timeIntervals[i].start),
+                        end: formatTime(timeIntervals[i].end)
+                    };
+
+                    postData.people.push(personData);
+                    addTableRow(table, personData);
+                    currentIndex++;
+                }
+
+                postSection.appendChild(table);
+                postListContainer.appendChild(postSection);
+                watchData.push(postData);
+            }
+
+            document.getElementById('watchListsContainer').style.display = 'block';
+        }
+
+        async function exportToPDF() {
+            const element = document.getElementById('postList').cloneNode(true);
+            
+            const dateDiv = document.createElement('div');
+            dateDiv.innerHTML = `<h3>Date: ${document.getElementById('currentDate').textContent}</h3>`;
+            element.insertBefore(dateDiv, element.firstChild);
+
+            const opt = {
+                margin: 1,
+                filename: 'watch-list.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            element.querySelectorAll('input, .no-print').forEach(el => el.remove());
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function copyToClipboard() {
+            let text = `Watch List - ${document.getElementById('currentDate').textContent}\n\n`;
+            
+            const posts = document.querySelectorAll('.post-section');
+            posts.forEach(post => {
+                const postName = post.querySelector('input').value;
+                text += `${postName}\n`;
+                text += '------------------------\n';
+                
+                const rows = post.querySelectorAll('tr');
+                rows.forEach((row, index) => {
+                    if (index === 0) {
+                        text += `Person | Start Time | End Time\n`;
+                    } else {
+                        const cells = row.querySelectorAll('td');
+                        text += `${cells[0].textContent} | ${cells[1].textContent} | ${cells[2].textContent}\n`;
+                    }
+                });
+                text += '\n';
+            });
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Watch list copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+
+        function calculateTimeIntervals(startTime, endTime, numPeople) {
+            const intervals = [];
+            const totalMs = endTime - startTime;
+            const msPerPerson = totalMs / numPeople;
+
+            for (let i = 0; i < numPeople; i++) {
+                intervals.push({
+                    start: new Date(startTime.getTime() + (i * msPerPerson)),
+                    end: i === numPeople - 1 ? 
+                         endTime : 
+                         new Date(startTime.getTime() + ((i + 1) * msPerPerson))
+                });
+            }
+
+            return intervals;
+        }
+
+        function validateInputs(posts, men, startTime, endTime) {
+            let isValid = true;
+            document.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+
+            if (isNaN(posts) || posts < 1) {
+                document.getElementById('postsError').style.display = 'block';
+                isValid = false;
+            }
+
+            if (isNaN(men) || men < 1) {
+                document.getElementById('menError').style.display = 'block';
+                isValid = false;
+            }
+
+            if (!startTime) {
+                document.getElementById('startTimeError').style.display = 'block';
+                isValid = false;
+            }
+
+            if (!endTime) {
+                document.getElementById('endTimeError').style.display = 'block';
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        function createTable() {
+            const table = document.createElement('table');
+            const header = table.createTHead();
+            const headerRow = header.insertRow();
+            ['Person', 'Start Time', 'End Time'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            return table;
+        }
+
+        function addTableRow(table, personData) {
+            const row = table.insertRow();
+            Object.values(personData).forEach(text => {
+                const cell = row.insertCell();
+                cell.textContent = text;
+            });
+        }
+
+        function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            function formatTime(date) {
+                return date.toTimeString().slice(0, 5);
+            }
+
+            function addTimeToDate(date, hours) {
+                return new Date(date.getTime() + hours * 60 * 60 * 1000);
+            }
+        </script>
+
+    </body>
+</html>
